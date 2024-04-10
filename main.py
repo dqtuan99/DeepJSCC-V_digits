@@ -23,8 +23,8 @@ from utils import EarlyStopping
 
 DS_NAME = ["MNIST", "MNISTM", "SYN", "USPS"]
 
-BATCH_SIZE = 64
-EPOCHS = 50
+BATCH_SIZE = 128
+EPOCHS = 20
 LEARNING_RATE = 1e-4
 
 CHANNEL = 'AWGN'  # Choose AWGN or Fading
@@ -33,7 +33,7 @@ KERNEL_SIZE = 5
 
 IMAGE_SIZE = 32
 
-SAVE_EVERY = 5
+SAVE_EVERY = 2
 
 enc_out_shape = [48, IMAGE_SIZE//4, IMAGE_SIZE//4]
 
@@ -58,7 +58,6 @@ for ds_idx in range(len(DS_NAME)):
                                               shuffle=True)
 
     DeepJSCC_V = ADJSCC_V(enc_out_shape, KERNEL_SIZE, N_CHANNELS).cuda()
-    # DeepJSCC_V = nn.DataParallel(DeepJSCC_V)
 
     criterion = nn.MSELoss().cuda()
     optimizer = torch.optim.Adam(DeepJSCC_V.parameters(), lr=LEARNING_RATE)
@@ -76,6 +75,8 @@ for ds_idx in range(len(DS_NAME)):
     train_info = []
     eval_info = []
 
+    total_iter = 0
+
     for epoch in range(EPOCHS):
 
         DeepJSCC_V.train()
@@ -83,10 +84,13 @@ for ds_idx in range(len(DS_NAME)):
         # Model training
         train_loss = 0.0
 
+        print(f'Epoch {epoch+1} training:')
+
         for batch_idx, (x_input, _) in tqdm(enumerate(train_loader),
-                                            total=len(train_loader),
-                                            desc=f'Epoch {epoch+1} training progress'):
-            # print(batch_idx)%
+                                            total=len(train_loader)):
+
+
+            x_input = (x_input + 1)/2
             x_input = x_input.cuda()
 
             SNR_TRAIN = torch.randint(0, 28, (x_input.shape[0], 1)).cuda()
@@ -103,10 +107,14 @@ for ds_idx in range(len(DS_NAME)):
 
             train_loss += loss.item() * x_input.size(0)
 
+            total_iter += 1
+
+            if total_iter % 100 == 0:
+                print(f' iter: {total_iter}, loss: {loss.item()}')
+
         train_loss /= len(train_ds)
 
-        print()
-        print(f'Average train loss: {train_loss}')
+        print(f'\nAverage train loss: {train_loss}')
         print("------------------------------")
 
         train_info.append([train_loss])
@@ -119,10 +127,14 @@ for ds_idx in range(len(DS_NAME)):
         DeepJSCC_V.eval()
         eval_loss = 0
 
+        print(f'Epoch {epoch+1} evaluating:')
+
         with torch.no_grad():
 
-            for batch_idx, (test_input, _) in enumerate(test_loader):
+            for batch_idx, (test_input, _) in tqdm(enumerate(test_loader),
+                                                   total=len(test_loader)):
 
+                test_input = (test_input + 1)/2
                 test_input = test_input.cuda()
 
                 SNR_TEST = torch.randint(0, 28, (test_input.shape[0], 1)).cuda()
@@ -134,7 +146,7 @@ for ds_idx in range(len(DS_NAME)):
 
             eval_loss = eval_loss / len(test_ds)
 
-        print(f'Average eval loss: {eval_loss}')
+        print(f'\nAverage eval loss: {eval_loss}')
         print("==============================")
 
         eval_info.append([eval_loss])
